@@ -10,18 +10,25 @@ from tensorflow.python.ops import state_ops
 from tensorflow.python.ops import control_flow_ops
 
 
-def multiclass_auc(labels, predictions, name=None, updates_collections=None, metrics_collections=None):
-    """Computes multi-class AUC (MAUC) as described in
-    Hand, D.J. & Till, R.J. Machine Learning (2001) 45: 171. https://doi.org/10.1023/A:1010920819831 [1]
+def multiclass_auc(labels,
+                   predictions,
+                   name=None,
+                   updates_collections=None,
+                   metrics_collections=None):
+    """Computes multi-class AUC (MAUC) as described in Hand, D.J. & Till, R.J.
+    Machine Learning (2001) 45: 171. https://doi.org/10.1023/A:1010920819831 [1]
 
-    The `multiclass_auc` function computes a separability matrix (denoted as A in the paper) for all
-    pairwise comparisons of  different classes. Each value in the separability matrix is an overall
-    measure of how well separated are the estimated distributions for the two considered classes.
-    The overall performance of the classification rule in separating all classes is then the average
-    of the separability matrix (divided by 2 because the matrix is symmetric).
+    The `multiclass_auc` function computes a separability matrix (denoted as A
+    in the paper) for all pairwise comparisons of  different classes. Each
+    value in the separability matrix is an overall measure of how well
+    separated are the estimated distributions for the two considered classes.
+    The overall performance of the classification rule in separating all
+    classes is then the average of the separability matrix (divided by 2
+    because the matrix is symmetric).
 
-    USAGE NOTE: this approach requires storing all of the predictions and labels
-    for a single evaluation in memory, so it may not be usable when the evaluation
+    USAGE NOTE: this approach requires storing all of the predictions and
+    labels for a single evaluation in memory, so it may not be usable when
+    the evaluation
     batch size and/or the number of evaluation steps is very large.
 
     Args:
@@ -47,21 +54,26 @@ def multiclass_auc(labels, predictions, name=None, updates_collections=None, met
         predictions = array_ops.reshape(predictions, [-1, num_classes])
 
         # Accumulate predictions and labels
-        preds_accum, update_preds = streaming_concat(predictions, name='concat_preds')
-        labels_accum, update_labels = streaming_concat(labels, name='concat_labels')
+        preds_accum, update_preds = streaming_concat(
+            predictions, name='concat_preds')
+        labels_accum, update_labels = streaming_concat(
+            labels, name='concat_labels')
         update_op = control_flow_ops.group(update_preds, update_labels)
 
         def _compute_mauc(predictions, labels):
-            """Computes multi-class auc"""
+            """Computes multi-class auc."""
             # Extract number of classes
             shapes = predictions.get_shape().as_list()
             num_classes = shapes[-1]
-            a_mtr = ops.convert_to_tensor(
-                [[_separability(labels, predictions, c1=i, c2=j) for i in range(num_classes)] for j in
-                 range(num_classes)])
-            return math_ops.divide(math_ops.reduce_sum(a_mtr), num_classes * (num_classes - 1.0))
+            a_mtr = ops.convert_to_tensor([[
+                _separability(labels, predictions, c1=i, c2=j)
+                for i in range(num_classes)
+            ] for j in range(num_classes)])
+            return math_ops.divide(
+                math_ops.reduce_sum(a_mtr), num_classes * (num_classes - 1.0))
 
-        mauc_value = _compute_mauc(predictions=preds_accum, labels=labels_accum)
+        mauc_value = _compute_mauc(
+            predictions=preds_accum, labels=labels_accum)
 
         if updates_collections:
             ops.add_to_collections(updates_collections, update_op)
@@ -72,10 +84,11 @@ def multiclass_auc(labels, predictions, name=None, updates_collections=None, met
 
 
 def _separability(labels, predictions, c1=0, c2=1):
-    """Computes the measure of separability between classes labeled as `c1` and `c2`.
-    This quantity is denoted as \hat{A} in the paper. It is defined as the probability that a randomly
-    drawn member of class `c2` will have a lower estimated probability of belonging to class
-    `c1` than a randomly drawn member of class `c1`
+    """Computes the measure of separability between classes labeled as `c1` and
+    `c2`. This quantity is denoted as \hat{A} in the paper. It is defined as
+    the probability that a randomly drawn member of class `c2` will have a
+    lower estimated probability of belonging to class `c1` than a randomly
+    drawn member of class `c1`
 
     Args:
         labels: A `Tensor` of the same shape as `predictions`.
@@ -84,37 +97,49 @@ def _separability(labels, predictions, c1=0, c2=1):
         c2: Label for class 2.
 
     Returns:
-        A `Tensor` as the measure of separability between classes labeled as `c1` and `c2`.
-        The tensor shape is [batch_size, 1].
+        A `Tensor` as the measure of separability between classes labeled as
+        `c1` and `c2`. The tensor shape is [batch_size, 1].
     """
 
-    # Get a list of indices for the classes that are being compared (`c1` and `c2`)
+    # Get a list of indices for the classes that are being compared (`c1` and
+    # `c2`)
     indices_selected_classes = array_ops.where(
-        gen_math_ops.logical_or(math_ops.equal(labels, c1), math_ops.equal(labels, c2)))
+        gen_math_ops.logical_or(
+            math_ops.equal(labels, c1), math_ops.equal(labels, c2)))
     # Use the indices to select corresponding labels and predictions
-    labels_selected_classes = array_ops.gather(labels, indices_selected_classes)
-    preds_selected_classes = array_ops.squeeze(array_ops.gather(predictions, indices_selected_classes), 1)
+    labels_selected_classes = array_ops.gather(labels,
+                                               indices_selected_classes)
+    preds_selected_classes = array_ops.squeeze(
+        array_ops.gather(predictions, indices_selected_classes), 1)
     # Concatenate labels and corresponding predictions
-    points_selected_classes = array_ops.concat(
-        [preds_selected_classes, math_ops.cast(labels_selected_classes, preds_selected_classes.dtype)], 1)
+    points_selected_classes = array_ops.concat([
+        preds_selected_classes,
+        math_ops.cast(labels_selected_classes, preds_selected_classes.dtype)
+    ], 1)
 
     # Compute rank for each label - simply 1 based array of ints
-    all_rank_indices = math_ops.range(1, array_ops.shape(labels_selected_classes)[0] + 1)
+    all_rank_indices = math_ops.range(
+        1,
+        array_ops.shape(labels_selected_classes)[0] + 1)
 
     # Number of class 1 and class 2 instances
     n1 = _count(labels_selected_classes, c1)
     n2 = _count(labels_selected_classes, c2)
 
     # Compute total ranks for class 1 and class 2
-    sum_ranks_c1 = _total_rank_for_class(points_selected_classes, c1, all_rank_indices)
-    sum_ranks_c2 = _total_rank_for_class(points_selected_classes, c2, all_rank_indices)
+    sum_ranks_c1 = _total_rank_for_class(points_selected_classes, c1,
+                                         all_rank_indices)
+    sum_ranks_c2 = _total_rank_for_class(points_selected_classes, c2,
+                                         all_rank_indices)
 
-    # Compute separability (denoted as A in the paper [1] - eqn (3) with 1->2 and 0->1 and
-    # averaged over swapped classes).
+    # Compute separability (denoted as A in the paper [1] - eqn (3) with 1->2
+    # and 0->1 and averaged over swapped classes).
     # Note that if a batch contains no examples of one of the classes A value
-    # diverges due to division by 0, so `safe_div` is used to ignores these cases
-    return math_ops.div_no_nan(sum_ranks_c1 + sum_ranks_c2 - _sum_first_n(n1) - _sum_first_n(n2),
-                                       2.0 * n1 * n2)
+    # diverges due to division by 0, so `safe_div` is used to ignores these
+    # cases
+    return math_ops.div_no_nan(
+        sum_ranks_c1 + sum_ranks_c2 - _sum_first_n(n1) - _sum_first_n(n2),
+        2.0 * n1 * n2)
 
 
 def _count(x, value):
@@ -126,7 +151,8 @@ def _count(x, value):
     Returns:
         A `Tensor` as the number of occurrences of `value` in `x`.
     """
-    return math_ops.reduce_sum(math_ops.cast(math_ops.equal(x, value), dtypes.float32))
+    return math_ops.reduce_sum(
+        math_ops.cast(math_ops.equal(x, value), dtypes.float32))
 
 
 def _sum_first_n(N):
@@ -149,7 +175,8 @@ def _total_rank_for_class(points, c, all_rank_indices):
     Args:
         points: A `Tensor` of concatenated predictions and labels.
         c: A label of the class by whose probabilities the sorting is done.
-        all_rank_indices: A `Tensor` containing all ranks for the classes being compared.
+        all_rank_indices: A `Tensor` containing all ranks for the classes
+        being compared.
 
     Returns:
         Total rank for class `c` of the batch.
@@ -160,23 +187,30 @@ def _total_rank_for_class(points, c, all_rank_indices):
 
     # Sort `points` by predictions for class `c`
     sorted_indices = sort_ops.argsort(preds_class, 0)
-    points_sorted_by_prob_class = array_ops.squeeze(array_ops.gather(points, sorted_indices), 1)
+    points_sorted_by_prob_class = array_ops.squeeze(
+        array_ops.gather(points, sorted_indices), 1)
 
     # Now we need only labels - extract them from the last dimension
     last_dim = points.get_shape().as_list()[1] - 1
-    labels_sorted_by_prob_class = array_ops.slice(points_sorted_by_prob_class, [0, last_dim], [-1, 1])
+    labels_sorted_by_prob_class = array_ops.slice(points_sorted_by_prob_class,
+                                                  [0, last_dim], [-1, 1])
 
     # Convert labels back to int
-    labels_sorted_by_prob_class_int = math_ops.cast(labels_sorted_by_prob_class, dtypes.int64)
+    labels_sorted_by_prob_class_int = math_ops.cast(
+        labels_sorted_by_prob_class, dtypes.int64)
 
     # Labels of class `c`
-    rank_indices_class = array_ops.where(math_ops.equal(labels_sorted_by_prob_class_int, c))
+    rank_indices_class = array_ops.where(
+        math_ops.equal(labels_sorted_by_prob_class_int, c))
     # array_ops.where adds another dimension - ignore it
-    rank_indices_class_values = array_ops.slice(rank_indices_class, [0, 0], [-1, 1])
+    rank_indices_class_values = array_ops.slice(rank_indices_class, [0, 0],
+                                                [-1, 1])
 
     # Total rank
-    rank_elements_class = array_ops.gather(all_rank_indices, rank_indices_class_values)
-    return math_ops.cast(math_ops.reduce_sum(rank_elements_class), dtypes.float32)
+    rank_elements_class = array_ops.gather(all_rank_indices,
+                                           rank_indices_class_values)
+    return math_ops.cast(
+        math_ops.reduce_sum(rank_elements_class), dtypes.float32)
 
 
 # NOTE: Copied from tf.contrib. Is there a better way to copy?
@@ -205,8 +239,8 @@ def streaming_concat(values,
         than the axis to concatenate along must be statically known.
       axis: optional integer axis to concatenate along.
       max_size: optional integer maximum size of `value` along the given axis.
-        Once the maximum size is reached, further updates are no-ops. By default,
-        there is no maximum size: the array is resized as necessary.
+        Once the maximum size is reached, further updates are no-ops. By
+        default, there is no maximum size: the array is resized as necessary.
       metrics_collections: An optional list of collections that `value`
         should be added to.
       updates_collections: An optional list of collections `update_op` should be
@@ -234,10 +268,13 @@ def streaming_concat(values,
         if not 0 <= axis < ndim:
             raise ValueError('axis = %r not in [0, %r)' % (axis, ndim))
 
-        fixed_shape = [dim.value for n, dim in enumerate(values_shape) if n != axis]
+        fixed_shape = [
+            dim.value for n, dim in enumerate(values_shape) if n != axis
+        ]
         if any(value is None for value in fixed_shape):
-            raise ValueError('all dimensions of `values` other than the dimension to '
-                             'concatenate along must have statically known size')
+            raise ValueError(
+                'all dimensions of `values` other than the dimension to '
+                'concatenate along must have statically known size')
 
         # We move `axis` to the front of the internal array so assign ops can be
         # applied to contiguous slices
@@ -247,7 +284,9 @@ def streaming_concat(values,
             init_shape, values.dtype, validate_shape=False, name='array')
         size = metric_variable([], dtypes.int32, name='size')
 
-        perm = [0 if n == axis else n + 1 if n < axis else n for n in range(ndim)]
+        perm = [
+            0 if n == axis else n + 1 if n < axis else n for n in range(ndim)
+        ]
         valid_array = array[:size]
         valid_array.set_shape([None] + fixed_shape)
         value = array_ops.transpose(valid_array, perm, name='concat')
@@ -266,7 +305,8 @@ def streaming_concat(values,
             next_shape = array_ops.stack([next_size] + fixed_shape)
             new_value = array_ops.zeros(next_shape, dtype=values.dtype)
             old_value = array.value()
-            assign_op = state_ops.assign(array, new_value, validate_shape=False)
+            assign_op = state_ops.assign(
+                array, new_value, validate_shape=False)
             with ops.control_dependencies([assign_op]):
                 copy_op = array[:size].assign(old_value[:size])
             # return value needs to be the same dtype as no_op() for cond
@@ -304,8 +344,6 @@ def _next_array_size(required_size, growth_factor=1.5):
       tf.Tensor with dtype=int32 giving the next array size.
     """
     exponent = math_ops.ceil(
-        math_ops.log(math_ops.cast(required_size, dtypes.float32)) / math_ops.log(
-            math_ops.cast(growth_factor, dtypes.float32)))
-    return math_ops.cast(math_ops.ceil(growth_factor ** exponent), dtypes.int32)
-
-
+        math_ops.log(math_ops.cast(required_size, dtypes.float32)) /
+        math_ops.log(math_ops.cast(growth_factor, dtypes.float32)))
+    return math_ops.cast(math_ops.ceil(growth_factor**exponent), dtypes.int32)
