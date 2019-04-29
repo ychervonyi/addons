@@ -20,7 +20,7 @@ def multiclass_auc(labels,
                    updates_collections=None,
                    metrics_collections=None):
     """Computes multi-class AUC (MAUC) as described in Hand, D.J. & Till, R.J.
-    Machine Learning (2001) 45: 171. https://doi.org/10.1023/A:1010920819831
+    Machine Learning (2001) 45: 171. https://doi.org/10.1023/A:1010920819831.
     [1]
 
     The `multiclass_auc` function computes a separability matrix (denoted as A
