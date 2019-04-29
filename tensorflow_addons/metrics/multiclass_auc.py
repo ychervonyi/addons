@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 from tensorflow.python.framework import ops
 from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import math_ops
@@ -16,7 +20,8 @@ def multiclass_auc(labels,
                    updates_collections=None,
                    metrics_collections=None):
     """Computes multi-class AUC (MAUC) as described in Hand, D.J. & Till, R.J.
-    Machine Learning (2001) 45: 171. https://doi.org/10.1023/A:1010920819831 [1]
+    Machine Learning (2001) 45: 171. https://doi.org/10.1023/A:1010920819831
+    [1]
 
     The `multiclass_auc` function computes a separability matrix (denoted as A
     in the paper) for all pairwise comparisons of  different classes. Each
@@ -33,7 +38,8 @@ def multiclass_auc(labels,
 
     Args:
         labels: A `Tensor` with the shape [batch_size, num_points].
-        predictions: A `Tensor` with shape [batch_size, num_points, num_classes].
+        predictions: A `Tensor` with shape [batch_size, num_points,
+            num_classes].
         name: A string used as the name for this metric.
 
     Returns:
@@ -98,7 +104,7 @@ def _separability(labels, predictions, c1=0, c2=1):
 
     Returns:
         A `Tensor` as the measure of separability between classes labeled as
-        `c1` and `c2`. The tensor shape is [batch_size, 1].
+            `c1` and `c2`. The tensor shape is [batch_size, 1].
     """
 
     # Get a list of indices for the classes that are being compared (`c1` and
@@ -174,9 +180,9 @@ def _total_rank_for_class(points, c, all_rank_indices):
 
     Args:
         points: A `Tensor` of concatenated predictions and labels.
-        c: A label of the class by whose probabilities the sorting is done.
+            c: A label of the class by whose probabilities the sorting is done.
         all_rank_indices: A `Tensor` containing all ranks for the classes
-        being compared.
+            being compared.
 
     Returns:
         Total rank for class `c` of the batch.
@@ -213,7 +219,8 @@ def _total_rank_for_class(points, c, all_rank_indices):
         math_ops.reduce_sum(rank_elements_class), dtypes.float32)
 
 
-# NOTE: Copied from tf.contrib. Is there a better way to copy?
+# TODO: The following function is copied from tf.contrib. Is there a better way
+#  to use it? maybe import?
 def streaming_concat(values,
                      axis=0,
                      max_size=None,
@@ -235,26 +242,27 @@ def streaming_concat(values,
     using the same framework as other streaming metrics.
 
     Args:
-      values: `Tensor` to concatenate. Rank and the shape along all axes other
-        than the axis to concatenate along must be statically known.
-      axis: optional integer axis to concatenate along.
-      max_size: optional integer maximum size of `value` along the given axis.
-        Once the maximum size is reached, further updates are no-ops. By
-        default, there is no maximum size: the array is resized as necessary.
-      metrics_collections: An optional list of collections that `value`
-        should be added to.
-      updates_collections: An optional list of collections `update_op` should be
-        added to.
-      name: An optional variable_scope name.
+        values: `Tensor` to concatenate. Rank and the shape along all axes
+            other than the axis to concatenate along must be statically known.
+        axis: optional integer axis to concatenate along.
+        max_size: optional integer maximum size of `value` along the given
+            axis. Once the maximum size is reached, further updates are no-ops.
+            By default, there is no maximum size: the array is resized as
+            necessary.
+        metrics_collections: An optional list of collections that `value`
+            should be added to.
+        updates_collections: An optional list of collections `update_op` should
+            be added to.
+        name: An optional variable_scope name.
 
     Returns:
-      value: A `Tensor` representing the concatenated values.
-      update_op: An operation that concatenates the next values.
+        value: A `Tensor` representing the concatenated values.
+        update_op: An operation that concatenates the next values.
 
     Raises:
-      ValueError: if `values` does not have a statically known rank, `axis` is
-        not in the valid range or the size of `values` is not statically known
-        along any axis other than `axis`.
+        ValueError: if `values` does not have a statically known rank, `axis`
+            is not in the valid range or the size of `values` is not
+            statically known along any axis other than `axis`.
     """
     with variable_scope.variable_scope(name, 'streaming_concat', (values,)):
         # pylint: disable=invalid-slice-index
@@ -287,6 +295,7 @@ def streaming_concat(values,
         perm = [
             0 if n == axis else n + 1 if n < axis else n for n in range(ndim)
         ]
+        # TODO: sanity-check says "Value 'array' is unsubscriptable"
         valid_array = array[:size]
         valid_array.set_shape([None] + fixed_shape)
         value = array_ops.transpose(valid_array, perm, name='concat')
@@ -336,12 +345,12 @@ def _next_array_size(required_size, growth_factor=1.5):
     """Calculate the next size for reallocating a dynamic array.
 
     Args:
-      required_size: number or tf.Tensor specifying required array capacity.
-      growth_factor: optional number or tf.Tensor specifying the growth factor
-        between subsequent allocations.
+        required_size: number or tf.Tensor specifying required array capacity.
+        growth_factor: optional number or tf.Tensor specifying the growth
+            factor between subsequent allocations.
 
     Returns:
-      tf.Tensor with dtype=int32 giving the next array size.
+        tf.Tensor with dtype=int32 giving the next array size.
     """
     exponent = math_ops.ceil(
         math_ops.log(math_ops.cast(required_size, dtypes.float32)) /
